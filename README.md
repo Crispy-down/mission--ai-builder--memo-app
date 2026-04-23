@@ -1,27 +1,12 @@
-This is a Kotlin Multiplatform project targeting Desktop (JVM).
+Kotlin MultiPlatform App by Claude Code
 
-* [/composeApp](./composeApp/src) is for code that will be shared across your Compose Multiplatform applications.
-  It contains several subfolders:
-  - [commonMain](./composeApp/src/commonMain/kotlin) is for code that’s common for all targets.
-  - Other folders are for Kotlin code that will be compiled for only the platform indicated in the folder name.
-    For example, if you want to use Apple’s CoreCrypto for the iOS part of your Kotlin app,
-    the [iosMain](./composeApp/src/iosMain/kotlin) folder would be the right place for such calls.
-    Similarly, if you want to edit the Desktop (JVM) specific part, the [jvmMain](./composeApp/src/jvmMain/kotlin)
-    folder is the appropriate location.
+#1. 마크다운 문법 활성화 + 가이드 제공
+#2. 공유하기 버튼 클릭 시 썼던 내용 PDF 파일 형태로 저장 가능 + PDF 파일에서도 마크다운 문법 적용
+#3. 글자 색깔 변경 지원
+#4. 편집 / 미리보기 토글 형식을 통해 편집에서는 마크다운 문법을, 미리보기에서는 문법이 적용된 본문을 확인할 수 있음
+#5. 본문 내용 모두 지우기 UI 버튼 활성화
+#6. 좌측 화면에 메모 추가 가능
 
-### Build and Run Desktop (JVM) Application
-
-To build and run the development version of the desktop app, use the run configuration from the run widget
-in your IDE’s toolbar or run it directly from the terminal:
-- on macOS/Linux
-  ```shell
-  ./gradlew :composeApp:run
-  ```
-- on Windows
-  ```shell
-  .\gradlew.bat :composeApp:run
-  ```
-
----
+![스크린샷 2026-04-23 152752.png](../../../%EC%8A%A4%ED%81%AC%EB%A6%B0%EC%83%B7%202026-04-23%20152752.png)
 
 Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-multiplatform-dev/get-started.html)…
