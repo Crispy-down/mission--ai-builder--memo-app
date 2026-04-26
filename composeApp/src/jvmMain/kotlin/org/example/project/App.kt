@@ -82,6 +82,7 @@ fun App() {
     val scope = rememberCoroutineScope()
     var exportMessage by remember { mutableStateOf<String?>(null) }
     var showClearConfirm by remember { mutableStateOf(false) }
+    var showPreviewLayoutDialog by remember { mutableStateOf(false) }
     var editorFontSize by remember { mutableStateOf(EditorFontSizeDefault) }
 
     MaterialTheme(
@@ -117,10 +118,21 @@ fun App() {
                     MemoEditor(
                         memo = memo,
                         isPreviewMode = viewModel.isPreviewMode,
+                        previewLayout = viewModel.previewLayout,
                         editorFontSize = editorFontSize,
                         onEditorFontSizeChange = { editorFontSize = it },
                         onContentChange = viewModel::updateContent,
-                        onTogglePreview = viewModel::togglePreviewMode,
+                        onSelectEdit = viewModel::exitPreview,
+                        onSelectPreview = {
+                            val layout = viewModel.previewLayout
+                            if (layout == null) {
+                                showPreviewLayoutDialog = true
+                            } else {
+                                viewModel.enterPreviewWith(layout)
+                            }
+                        },
+                        onChangePreviewLayout = viewModel::changePreviewLayout,
+                        onRequestPreviewLayoutPicker = { showPreviewLayoutDialog = true },
                         onClearContent = { showClearConfirm = true },
                         onShare = {
                             val safeName = memo.title
@@ -156,6 +168,47 @@ fun App() {
                 confirmButton = {
                     TextButton(onClick = { exportMessage = null }) {
                         Text("확인", color = AccentBlue)
+                    }
+                },
+                containerColor = BgSidebar
+            )
+        }
+
+        if (showPreviewLayoutDialog) {
+            AlertDialog(
+                onDismissRequest = { showPreviewLayoutDialog = false },
+                title = { Text("미리보기 표시 방식", color = TextPrimary) },
+                text = {
+                    Column {
+                        Text(
+                            "마크다운 미리보기를 어떻게 보여드릴까요?",
+                            color = TextPrimary,
+                            fontSize = 13.sp
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Text(
+                            "• 본문 바꾸기: 편집 화면을 미리보기로 전환합니다.\n" +
+                                "• 옆에 나란히 보기: 왼쪽에 편집, 오른쪽에 미리보기를 함께 표시하며 실시간으로 반영됩니다.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        viewModel.enterPreviewWith(PreviewLayout.SPLIT)
+                        showPreviewLayoutDialog = false
+                    }) {
+                        Text("옆에 나란히 보기", color = AccentBlue, fontWeight = FontWeight.SemiBold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        viewModel.enterPreviewWith(PreviewLayout.REPLACE)
+                        showPreviewLayoutDialog = false
+                    }) {
+                        Text("본문 바꾸기", color = TextPrimary)
                     }
                 },
                 containerColor = BgSidebar
@@ -306,13 +359,19 @@ fun MemoListItem(
 fun MemoEditor(
     memo: Memo,
     isPreviewMode: Boolean,
+    previewLayout: PreviewLayout?,
     editorFontSize: Float,
     onEditorFontSizeChange: (Float) -> Unit,
     onContentChange: (String) -> Unit,
-    onTogglePreview: () -> Unit,
+    onSelectEdit: () -> Unit,
+    onSelectPreview: () -> Unit,
+    onChangePreviewLayout: (PreviewLayout) -> Unit,
+    onRequestPreviewLayoutPicker: () -> Unit,
     onClearContent: () -> Unit,
     onShare: () -> Unit
 ) {
+    val isSplit = isPreviewMode && previewLayout == PreviewLayout.SPLIT
+    val isReplacePreview = isPreviewMode && previewLayout == PreviewLayout.REPLACE
     var textFieldValue by remember(memo.id) {
         mutableStateOf(TextFieldValue(memo.content, TextRange(memo.content.length)))
     }
@@ -373,7 +432,11 @@ fun MemoEditor(
 
             SegmentedViewToggle(
                 isPreviewMode = isPreviewMode,
-                onTogglePreview = onTogglePreview
+                previewLayout = previewLayout,
+                onSelectEdit = onSelectEdit,
+                onSelectPreview = onSelectPreview,
+                onChangePreviewLayout = onChangePreviewLayout,
+                onRequestPreviewLayoutPicker = onRequestPreviewLayoutPicker
             )
 
             Spacer(Modifier.width(20.dp))
@@ -415,49 +478,47 @@ fun MemoEditor(
                         }
                     }
             ) {
-                if (isPreviewMode) {
-                    val scrollState = rememberScrollState()
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .verticalScroll(scrollState)
-                                .padding(20.dp)
-                        ) {
-                            MarkdownView(
-                                text = memo.content,
-                                fontScale = editorFontSize / EditorFontSizeDefault
-                            )
-                        }
-                        VerticalScrollbar(
-                            adapter = rememberScrollbarAdapter(scrollState),
-                            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+                when {
+                    isReplacePreview -> {
+                        PreviewPane(
+                            text = memo.content,
+                            fontScale = editorFontSize / EditorFontSizeDefault,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
-                } else {
-                    val editorScrollState = rememberScrollState()
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        BasicTextField(
-                            value = textFieldValue,
+                    isSplit -> {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            EditorPane(
+                                textFieldValue = textFieldValue,
+                                onValueChange = {
+                                    textFieldValue = it
+                                    if (it.text != memo.content) onContentChange(it.text)
+                                },
+                                fontSize = editorFontSize,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(ColorDivider)
+                            )
+                            PreviewPane(
+                                text = memo.content,
+                                fontScale = editorFontSize / EditorFontSizeDefault,
+                                modifier = Modifier.weight(1f).fillMaxHeight()
+                            )
+                        }
+                    }
+                    else -> {
+                        EditorPane(
+                            textFieldValue = textFieldValue,
                             onValueChange = {
                                 textFieldValue = it
                                 if (it.text != memo.content) onContentChange(it.text)
                             },
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(editorScrollState)
-                                .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp),
-                            textStyle = TextStyle(
-                                color = TextPrimary,
-                                fontSize = editorFontSize.sp,
-                                fontFamily = FontFamily.Monospace,
-                                lineHeight = (editorFontSize * 1.57f).sp
-                            ),
-                            cursorBrush = SolidColor(AccentBlue)
-                        )
-                        VerticalScrollbar(
-                            adapter = rememberScrollbarAdapter(editorScrollState),
-                            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+                            fontSize = editorFontSize,
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -465,7 +526,7 @@ fun MemoEditor(
 
             Box(modifier = Modifier.width(1.dp).fillMaxHeight().background(ColorDivider))
             SideToolbar(
-                showColorPicker = !isPreviewMode,
+                showColorPicker = !isReplacePreview,
                 guideActive = showGuide,
                 onColor = { hex -> applyFormat("<c:$hex>", "</c>") },
                 onToggleGuide = { showGuide = !showGuide }
@@ -590,8 +651,14 @@ private fun FormatButton(
 @Composable
 private fun SegmentedViewToggle(
     isPreviewMode: Boolean,
-    onTogglePreview: () -> Unit
+    previewLayout: PreviewLayout?,
+    onSelectEdit: () -> Unit,
+    onSelectPreview: () -> Unit,
+    onChangePreviewLayout: (PreviewLayout) -> Unit,
+    onRequestPreviewLayoutPicker: () -> Unit
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .height(28.dp)
@@ -601,7 +668,7 @@ private fun SegmentedViewToggle(
         SegmentHalf(
             label = "편집",
             active = !isPreviewMode,
-            onClick = { if (isPreviewMode) onTogglePreview() }
+            onClick = { if (isPreviewMode) onSelectEdit() }
         )
         Box(
             modifier = Modifier
@@ -612,7 +679,127 @@ private fun SegmentedViewToggle(
         SegmentHalf(
             label = "미리보기",
             active = isPreviewMode,
-            onClick = { if (!isPreviewMode) onTogglePreview() }
+            onClick = { if (!isPreviewMode) onSelectPreview() }
+        )
+        Box(
+            modifier = Modifier
+                .width(1.dp)
+                .fillMaxHeight()
+                .background(ColorDivider)
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .background(if (isPreviewMode) AccentBlue else Color.Transparent)
+                .clickable {
+                    if (previewLayout == null) {
+                        onRequestPreviewLayoutPicker()
+                    } else {
+                        menuOpen = true
+                    }
+                }
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = when (previewLayout) {
+                    PreviewLayout.SPLIT -> "⇆"
+                    PreviewLayout.REPLACE -> "▤"
+                    null -> "▾"
+                },
+                color = if (isPreviewMode) Color.White else TextPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Medium
+            )
+            DropdownMenu(
+                expanded = menuOpen,
+                onDismissRequest = { menuOpen = false },
+                containerColor = BgSidebar
+            ) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "본문 바꾸기",
+                            color = if (previewLayout == PreviewLayout.REPLACE) AccentBlue else TextPrimary,
+                            fontSize = 12.sp
+                        )
+                    },
+                    onClick = {
+                        onChangePreviewLayout(PreviewLayout.REPLACE)
+                        menuOpen = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            "옆에 나란히 보기",
+                            color = if (previewLayout == PreviewLayout.SPLIT) AccentBlue else TextPrimary,
+                            fontSize = 12.sp
+                        )
+                    },
+                    onClick = {
+                        onChangePreviewLayout(PreviewLayout.SPLIT)
+                        menuOpen = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun EditorPane(
+    textFieldValue: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    fontSize: Float,
+    modifier: Modifier = Modifier
+) {
+    val editorScrollState = rememberScrollState()
+    Box(modifier = modifier) {
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = onValueChange,
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(editorScrollState)
+                .padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp),
+            textStyle = TextStyle(
+                color = TextPrimary,
+                fontSize = fontSize.sp,
+                fontFamily = FontFamily.Monospace,
+                lineHeight = (fontSize * 1.57f).sp
+            ),
+            cursorBrush = SolidColor(AccentBlue)
+        )
+        VerticalScrollbar(
+            adapter = rememberScrollbarAdapter(editorScrollState),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
+        )
+    }
+}
+
+@Composable
+private fun PreviewPane(
+    text: String,
+    fontScale: Float,
+    modifier: Modifier = Modifier
+) {
+    val scrollState = rememberScrollState()
+    Box(modifier = modifier) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(scrollState)
+                .padding(20.dp)
+        ) {
+            MarkdownView(
+                text = text,
+                fontScale = fontScale
+            )
+        }
+        VerticalScrollbar(
+            adapter = rememberScrollbarAdapter(scrollState),
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight()
         )
     }
 }

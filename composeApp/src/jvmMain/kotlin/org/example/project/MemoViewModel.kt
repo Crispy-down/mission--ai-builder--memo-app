@@ -4,6 +4,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
+enum class PreviewLayout { REPLACE, SPLIT }
+
 class MemoViewModel {
     var memos by mutableStateOf(MemoStorage.loadAll())
         private set
@@ -12,6 +14,10 @@ class MemoViewModel {
         private set
 
     var isPreviewMode by mutableStateOf(false)
+        private set
+
+    var previewLayout by mutableStateOf<PreviewLayout?>(null)
+        private set
 
     fun selectMemo(memo: Memo) {
         selectedMemo = memo
@@ -41,8 +47,17 @@ class MemoViewModel {
         }
     }
 
-    fun togglePreviewMode() {
-        isPreviewMode = !isPreviewMode
+    fun exitPreview() {
+        isPreviewMode = false
+    }
+
+    fun enterPreviewWith(layout: PreviewLayout) {
+        previewLayout = layout
+        isPreviewMode = true
+    }
+
+    fun changePreviewLayout(layout: PreviewLayout) {
+        previewLayout = layout
     }
 
     fun clearContent() {
